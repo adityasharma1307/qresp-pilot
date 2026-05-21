@@ -1,0 +1,13 @@
+# Python auto-generated files
+    __pycache__/
+    *.pyc
+    *.egg-info/
+    build/
+    dist/
+
+# Jupyter Notebook checkpoints
+    .ipynb_checkpoints/
+
+# OS junk files
+    Thumbs.db
+    .DS_Store

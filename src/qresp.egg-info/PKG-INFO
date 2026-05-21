@@ -1,0 +1,217 @@
+Metadata-Version: 2.4
+Name: qresp
+Version: 0.1.0
+Summary: Quantum-Resilient Provenance audit tool for ML model registries
+Author-email: Aditya Sharma <f20230265@dubai.bits-pilani.ac.in>
+License: MIT
+Keywords: post-quantum,cryptography,ml-supply-chain,huggingface,provenance
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Security :: Cryptography
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: huggingface_hub>=0.24
+Requires-Dist: requests>=2.31
+Requires-Dist: tenacity>=8.2
+Requires-Dist: typer>=0.12
+Requires-Dist: rich>=13.7
+Requires-Dist: pydantic>=2.5
+Provides-Extra: analysis
+Requires-Dist: pandas>=2.2; extra == "analysis"
+Requires-Dist: matplotlib>=3.9; extra == "analysis"
+Requires-Dist: jupyterlab>=4.0; extra == "analysis"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0; extra == "dev"
+Requires-Dist: ruff>=0.5; extra == "dev"
+Requires-Dist: mypy>=1.10; extra == "dev"
+
+# QResP — Quantum-Resilient Provenance Audit
+
+> Phase I of *Quantum-Resilient Provenance for Machine Learning Supply Chains*
+> (CS F376 Design Project, BITS Pilani Dubai Campus, 2025–26).
+> Supervisor: Dr. Tamizharasan Periyasamy.
+
+`qresp` is a command-line tool that audits the cryptographic provenance of
+public machine learning models on HuggingFace and classifies each one by
+quantum vulnerability. It produces a reproducible JSON Lines dataset that
+forms the empirical foundation of the project.
+
+## What it does, in plain terms
+
+The tool walks the HuggingFace registry, finds signature files attached to
+each model (if any), parses them, identifies the underlying signature
+algorithm, and tags the model with one of five labels:
+
+| Label        | Meaning                                                       |
+|--------------|---------------------------------------------------------------|
+| `safe`       | Uses a post-quantum signature scheme (ML-DSA or SLH-DSA)      |
+| `vulnerable` | Uses RSA, ECDSA, Ed25519 — broken by Shor's algorithm         |
+| `unsigned`   | No signature file present at all                              |
+| `mixed`      | Multiple signatures with disagreeing labels                   |
+| `error`      | Signature present but could not be parsed (kept for review)   |
+
+The tool **never downloads model weights**. It downloads only the signature
+files themselves (typically kilobytes), so a full 1000-model scan is cheap
+and fast.
+
+## Installation
+
+Requires Python 3.10 or newer.
+
+```bash
+git clone <repo-url>
+cd qresp
+pip install -e .
+```
+
+For analysis notebooks and figure generation:
+
+```bash
+pip install -e ".[analysis]"
+```
+
+For development (tests, linter, type checker):
+
+```bash
+pip install -e ".[dev]"
+```
+
+## Usage
+
+### Run a pilot scan on 50 models
+
+```bash
+qresp scan --n 50 --out data/pilot.jsonl
+```
+
+### Run the full audit on 1000 models
+
+```bash
+qresp scan --n 1000 --out data/full.jsonl
+```
+
+If your shell exports `HF_TOKEN`, the tool will pick it up automatically and
+benefit from higher API rate limits.
+
+### Summarise an existing dataset
+
+```bash
+qresp summarise --in data/pilot.jsonl
+```
+
+### Resume an interrupted scan
+
+The scanner writes one JSON record per line as soon as each model is processed.
+If the run is interrupted, just re-run the same command. Already-audited models
+are skipped automatically. Pass `--no-resume` to start over.
+
+## Project layout
+
+```
+qresp/
+├── pyproject.toml         # Package metadata, dev dependencies
+├── README.md              # This file
+├── src/qresp/
+│   ├── model.py           # Pydantic record schema, classification rules
+│   ├── detect.py          # Filename-based signature-file detection
+│   ├── parse.py           # Sigstore / GPG / in-toto algorithm parsers
+│   ├── hf_client.py       # HuggingFace API wrapper with retries
+│   ├── scanner.py         # End-to-end orchestrator (resumable)
+│   └── cli.py             # Typer command-line entry point
+├── tests/
+│   ├── fixtures_models.py # Hand-crafted ModelSummary fixtures
+│   ├── fake_client.py     # Network-free HfClient for tests
+│   ├── test_detect.py     # Signature-file detection
+│   ├── test_parse.py      # Algorithm-extraction parsers
+│   ├── test_model.py      # Classification rules from Table 4.1
+│   └── test_scanner.py    # End-to-end audit on fixtures
+├── scripts/
+│   └── generate_sample.py # Produce a sample dataset from fixtures
+└── data/
+    └── sample.jsonl       # Sample output from the fixtures
+```
+
+## Methodology and limitations
+
+### How models are selected
+
+The scanner asks the HuggingFace API for models in descending order of
+all-time download count, capped at the user-specified `--n`. Ties are broken
+by most-recent modification time. The audit is a **snapshot**: re-running it
+at a later date will likely pick up new models and miss models that were
+removed.
+
+### How signatures are detected
+
+Detection is purely **filename-based**, using a curated list of suffix
+patterns (`.sig`, `.sigstore`, `.intoto.json`, `.asc`, and so on). This is
+what lets the scanner avoid downloading model weights. The rules are
+defined in `src/qresp/detect.py` and tested exhaustively in
+`tests/test_detect.py`.
+
+### How algorithms are identified
+
+For each detected signature file the scanner downloads its raw bytes
+(typically a few kilobytes) and dispatches to a format-specific parser:
+
+* **Sigstore bundles** — JSON. Looks for either a Fulcio X.509 cert chain
+  (in which case the algorithm is inferred as ECDSA-P256, Fulcio's
+  default) or a raw SPKI public key (in which case the algorithm OID
+  is extracted).
+* **In-toto attestations** — DSSE envelopes; algorithm inferred from
+  embedded certificates.
+* **OpenPGP (`.asc`, `.gpg`)** — light-weight binary packet parser that
+  reads the public-key-algorithm byte.
+
+### Limitations worth being honest about
+
+1. **We detect declared signatures, not enforced ones.** A model may
+   carry a perfectly valid signature that no downloader actually verifies.
+   That gap is interesting but is out of scope for this tool.
+2. **Sigstore bundles without an X.509 cert and without a raw SPKI** —
+   for example, hardware-token signatures — fall through to `unknown`.
+3. **The OpenPGP parser is intentionally minimal.** It reads the
+   algorithm byte and stops; full RFC 9580 validation is not performed.
+4. The HuggingFace API can rate-limit anonymous clients. Use an
+   `HF_TOKEN` for serious runs.
+
+## Validating the classifier
+
+The test suite uses six hand-crafted fixtures that cover unsigned,
+Sigstore-Fulcio, Sigstore-RSA, OpenPGP-Ed25519, in-toto, and corrupted
+signatures. Run all tests with:
+
+```bash
+pytest tests/ -v
+pytest tests/ --cov=qresp --cov-report=term-missing
+```
+
+For the publication, we plan a manual validation pass on a stratified
+sample of 50 real models against the classifier output. That harness will
+live under `tests/validation/` once the full audit has been run.
+
+## Reproducibility
+
+The output file format is plain JSON Lines and the per-record schema is
+defined as a Pydantic model in `src/qresp/model.py`. Each record carries
+a UTC `audit_ts` timestamp that pins it to a specific moment in the
+HuggingFace registry's history. For the final paper artifact we plan
+to release the frozen dataset under a permissive licence with a Zenodo DOI.
+
+## Citation
+
+If you use this tool, please cite:
+
+```
+Sharma, A. (2026). QResP: Quantum-Resilient Provenance Audit for ML
+Supply Chains. BITS Pilani, Dubai Campus.
+```
+
+## Licence
+
+MIT.
