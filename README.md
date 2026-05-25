@@ -1,5 +1,10 @@
 # QResP — Quantum-Resilient Provenance Audit
 
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![Models audited](https://img.shields.io/badge/Models%20audited-1%2C000-green.svg)
+![PQ-safe](https://img.shields.io/badge/PQ--safe%20models-0%25-red.svg)
+
 > Phase I of *Quantum-Resilient Provenance for Machine Learning Supply Chains*
 > CS F376 Design Project, BITS Pilani Dubai Campus, 2025–26.
 > Supervisor: Dr. Tamizharasan Periyasamy.
@@ -8,6 +13,8 @@
 public machine learning models on HuggingFace and classifies each by
 quantum vulnerability. It produces a reproducible JSON Lines dataset that
 forms the empirical foundation of the project.
+
+The accompanying end-semester report is available in [`docs/report.pdf`](docs/report.pdf).
 
 ---
 
@@ -72,9 +79,12 @@ For development (tests, linter):
 pip install -e ".[dev]"
 ```
 
-> **Windows note:** after install, add the Scripts directory to PATH if
-> `qresp` is not found:
-> `set PATH=%PATH%;%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\Scripts`
+> **Windows note:** if `qresp` is not found after install, the Python
+> Scripts directory may not be on your PATH. Find it with:
+> ```
+> python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+> ```
+> Then add the printed path to your PATH environment variable.
 
 ---
 
@@ -149,8 +159,8 @@ Expected output:
 ```
 n = 1000
 Signed:        2 / 1000  (0.2%)   95% CI: [0.05%, 0.73%]
-Unsigned:    998 / 1000  (99.8%)   95% CI: [99.27%, 99.95%]
-Vulnerable:    2 / 1000  (0.20%)   95% CI: [0.055%, 0.726%]
+Unsigned:    998 / 1000  (99.8%)  95% CI: [99.27%, 99.95%]
+Vulnerable:    2 / 1000  (0.20%)  95% CI: [0.055%, 0.726%]
 PQ-safe:       0 / 1000  (0.0%)   95% CI: [0.00%, 0.38%]
 
 Power analysis: to detect 1% PQ adoption (vs 0%) at 80% power,
@@ -189,6 +199,8 @@ qresp/
 ├── data/               # Audit output (JSONL)
 │   ├── pilot.jsonl     # 50-model pilot scan
 │   └── full.jsonl      # 1,000-model full audit
+├── docs/               # Report and figures
+│   └── report.pdf
 ├── notebooks/          # Jupyter analysis notebooks
 │   └── analysis.ipynb
 ├── scripts/            # Utility scripts
@@ -202,6 +214,7 @@ qresp/
 │   └── scanner.py      # Audit orchestration
 ├── tests/              # Pytest test suite
 ├── stats.py            # Statistical inference script
+├── LICENSE
 └── pyproject.toml
 ```
 
@@ -209,8 +222,19 @@ qresp/
 
 ## Citing this work
 
+```bibtex
+@misc{sharma2026qresp,
+  author       = {Sharma, Aditya},
+  title        = {{QResP}: Quantum-Resilient Provenance Audit for
+                  Machine Learning Supply Chains},
+  year         = {2026},
+  howpublished = {CS F376 Design Project, BITS Pilani Dubai Campus},
+  url          = {https://github.com/adityasharma1307/qresp},
+}
 ```
-Sharma, A. (2026). Quantum-Resilient Provenance for Machine Learning
-Supply Chains — Phase I Audit. CS F376 Design Project,
-BITS Pilani Dubai Campus.
-```
+
+---
+
+## Licence
+
+This project is released under the [MIT License](LICENSE).
